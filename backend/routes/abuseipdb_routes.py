@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from services.abuseipdb_service import check_ip, check_block
-from app import db
+from extensions import db
 from models.threat import Threat
 
 abuse_bp = Blueprint("abuseipdb", __name__)

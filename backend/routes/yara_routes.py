@@ -2,7 +2,7 @@ import os
 import tempfile
 from flask import Blueprint, request, jsonify
 from services.yara_service import scan_file, scan_bytes
-from app import db
+from extensions import db
 from models.scan_result import ScanResult
 from models.alert import Alert
 

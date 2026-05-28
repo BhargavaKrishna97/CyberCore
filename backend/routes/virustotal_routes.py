@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from services.virustotal_service import check_file_hash, upload_and_scan, hash_file
-from app import db
+from extensions import db
 from models.threat import Threat
 
 vt_bp = Blueprint("virustotal", __name__)

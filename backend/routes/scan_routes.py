@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from services.nmap_service import run_nmap_scan
-from app import db
+from extensions import db
 from models.scan_result import ScanResult
 
 scan_bp = Blueprint("scan", __name__)
