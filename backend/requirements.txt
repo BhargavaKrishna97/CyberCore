@@ -1,0 +1,12 @@
+flask==3.0.3
+flask-sqlalchemy==3.1.1
+flask-cors==4.0.1
+flask-jwt-extended==4.6.0
+psycopg[binary]
+python-dotenv==1.0.1
+requests==2.32.3
+yara-python==4.5.1
+watchdog==4.0.1
+python-nmap==0.7.1
+celery==5.4.0
+redis==5.0.7
