@@ -59,4 +59,60 @@ def scan_upload():
 
     result = scan_bytes(file_bytes)
     result["filename"] = uploaded.filename
+
+    # --------------------------
+    # Save Scan Result to DB
+    # --------------------------
+    record = ScanResult(
+        target=uploaded.filename,
+        scan_type="yara",
+        status=result.get("status", "unknown"),
+        raw_output=result
+    )
+    db.session.add(record)
+
+    # --------------------------
+    # Create Alert if INFECTED
+    # --------------------------
+    if result.get("status") == "INFECTED":
+        alert = Alert(
+            alert_type="malware_detected",
+            severity="critical",
+            message=f"Upload infected: {uploaded.filename}",
+            file_path=uploaded.filename
+        )
+        db.session.add(alert)
+
+    db.session.commit()
+
     return jsonify(result), 200
+#Scan History API
+@yara_bp.route("/history", methods=["GET"])
+def scan_history():
+    scans = ScanResult.query.all()
+
+    return jsonify([
+        {
+            "id": s.id,
+            "target": s.target,
+            "scan_type": s.scan_type,
+            "status": s.status,
+            "raw_output": s.raw_output
+        }
+        for s in scans
+    ]), 200
+#Alerts API
+@yara_bp.route("/alerts", methods=["GET"])
+def get_alerts():
+    alerts = Alert.query.all()
+
+    return jsonify([
+        {
+            "id": a.id,
+            "type": a.alert_type,
+            "severity": a.severity,
+            "message": a.message,
+            "file": a.file_path
+        }
+        for a in alerts
+    ]), 200

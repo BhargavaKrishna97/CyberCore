@@ -14,7 +14,7 @@ def port_scan():
     """
     data   = request.get_json()
     target = data.get("target", "").strip()
-    ports  = data.get("ports", "1-1024")
+    ports  = data.get("ports", "1-6000")
 
     if not target:
         return jsonify({"error": "target is required"}), 400

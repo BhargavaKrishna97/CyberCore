@@ -8,8 +8,11 @@ Detects ransomware-like behaviour:
 
 import time
 import os
+import shutil
+import hashlib
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
+from services.virustotal_service import check_file_hash
 
 # Known ransomware extensions
 RANSOMWARE_EXTENSIONS = {
@@ -39,20 +42,29 @@ def _is_ransom_note(path: str) -> bool:
 def _save_alert(alert_type: str, severity: str, message: str, file_path: str):
     """Save alert to DB (import inside function to avoid circular imports)."""
     try:
-        from app import db
-        from flask import current_app
+        from app import app
+        from extensions import db
         from models.alert import Alert
-        with current_app.app_context():
+        with app.app_context():
             alert = Alert(
                 alert_type = alert_type,
                 severity   = severity,
                 message    = message,
-                file_path  = file_path,
+                file_path  = file_path
             )
             db.session.add(alert)
             db.session.commit()
+            print(f"[Monitor] Alert saved: {alert_type}")
     except Exception as e:
         print(f"[Monitor] DB save failed: {e}")
+
+def calculate_sha256(file_path):
+    sha256 = hashlib.sha256()
+
+    with open(file_path, "rb") as f:
+        while chunk := f.read(4096):
+            sha256.update(chunk)
+    return sha256.hexdigest()
 
 
 class RansomwareHandler(FileSystemEventHandler):
@@ -83,8 +95,64 @@ class RansomwareHandler(FileSystemEventHandler):
     def on_created(self, event):
         if event.is_directory:
             return
+        print(f"[DEBUG] New file detected: {event.src_path}")
+
         self._check_burst()
         path = event.src_path
+        try:
+
+            from services.yara_service import scan_file
+            print(f"[DEBUG] Running YARA scan on: {path}")
+
+            result = scan_file(path)
+            print(f"[YARA] Scan Result: {result}")
+            if result.get("status") == "INFECTED":
+                print(f"[ALERT] Malware detected: {path}")
+                _save_alert(
+                    "malware_detected",
+                    "critical",
+                    f"YARA detected malware in {path}",
+                    path
+                )
+                quarantine_dir="quarantine"
+                os.makedirs(quarantine_dir, exist_ok=True)
+                new_path = os.path.join(
+                    quarantine_dir,
+                    os.path.basename(path)
+                )
+                shutil.move(path, new_path)
+                print(f"[QUARANTINE] File moved to {new_path}")
+                file_hash = calculate_sha256(new_path)
+                print(f"[HASH] SHA256: {file_hash}")
+                _save_alert(
+                    "file_hash",
+                    "info",
+                    f"SHA256: {file_hash}",
+                    new_path
+                )
+                #virusTotal lookup
+                from services.virustotal_service import check_file_hash
+                vt_result = check_file_hash(file_hash)
+                print(f"[VT] Result: {vt_result}")
+                if vt_result.get("status") == "not_found":
+                    _save_alert(
+                        "virustotal_lookup",
+                        "info",
+                        "File hash not found in VirusTotal",
+                        new_path
+                    )
+                #VirusTotal Detection alert
+                elif vt_result.get("malicious", 0) > 0:
+                    print("[CRITICAL] VirusTotal detected malware")
+                    _save_alert(
+                        "virustotal_detected",
+                        "critical",
+                        f"VirusTotal detected malware ({vt_result['malicious']} engines)",
+                        new_path
+                    )
+                
+        except Exception as e:
+            print(f"[YARA ERROR] {e}")
 
         if _is_ransom_note(path):
             print(f"[CRITICAL] Ransom note created: {path}")

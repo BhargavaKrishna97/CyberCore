@@ -21,6 +21,9 @@ def check_file_hash(sha256: str) -> dict:
     url = f"{VT_BASE}/files/{sha256}"
     try:
         resp = requests.get(url, headers=_headers(), timeout=15)
+
+        print("VT STATUS:", resp.status_code)
+        print("VT RESPONSE:", resp.text[:500])
     except requests.RequestException as e:
         return {"error": str(e)}
 
@@ -63,3 +66,38 @@ def upload_and_scan(file_bytes: bytes, filename: str) -> dict:
 
     analysis_id = resp.json().get("data", {}).get("id", "")
     return {"status": "submitted", "analysis_id": analysis_id}
+
+def get_analysis_result(analysis_id):
+    url = f"{VT_BASE}/analyses/{analysis_id}"
+
+    resp = requests.get(
+        url,
+        headers=_headers(),
+        timeout=15
+    )
+
+    if resp.status_code != 200:
+        return {
+            "error": f"VT API error {resp.status_code}"
+        }
+
+    data = resp.json()
+
+    stats = (
+        data.get("data", {})
+            .get("attributes", {})
+            .get("stats", {})
+    )
+    status = (
+        data.get("data", {})
+            .get("attributes", {})
+            .get("status", "")
+    )
+
+    return {
+        "status": status,
+        "malicious": stats.get("malicious", 0),
+        "suspicious": stats.get("suspicious", 0),
+        "harmless": stats.get("harmless", 0),
+        "total": sum(stats.values())
+    }

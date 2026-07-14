@@ -1,39 +1,65 @@
-import nmap
-import json
+import subprocess
+import re
 
-def run_nmap_scan(target: str, ports: str = "1-1024") -> dict:
+def run_nmap_scan(target: str, ports: str = "1-6000") -> dict:
     """
-    Run an nmap port scan on the target.
-    target: IP or hostname (e.g. '192.168.1.1')
-    ports:  port range (e.g. '1-1024' or '80,443,8080')
+    Run Nmap scan and parse open ports.
     """
-    scanner = nmap.PortScanner()
 
     try:
-        scanner.scan(hosts=target, ports=ports, arguments="-sV --open")
-    except Exception as e:
-        return {"error": str(e), "target": target}
+        cmd = [
+            "nmap",
+	    "-Pn",
+	    "-sT",
+            "-sV",
+            "--open",
+            "-p",
+            ports,
+            target
+        ]
 
-    results = []
-    for host in scanner.all_hosts():
-        host_data = {
-            "host":     host,
-            "hostname": scanner[host].hostname(),
-            "state":    scanner[host].state(),
-            "protocols": {}
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            shell=False
+        )
+
+        output = result.stdout
+        print("="*50)
+        print("COMMAND:", " ".join(cmd))
+        print("="*50)
+        print("RETURN CODE:",result.returncode)
+        print("=" * 50)
+        print("STDOUT:")
+        print(output)
+        print("="*50)
+
+        print("STDERR:")
+        print(result.stderr)
+        print("="*50)
+
+        scan_results = []
+
+        for line in output.splitlines():
+            print("LINE:", repr(line))
+            match = re.search(r"(\d+)/tcp\s+open\s+(\S+)", line)
+
+            if match:
+                print("MATCH FOUND:", match.groups())
+                scan_results.append({
+                    "port": match.group(1),
+                    "service": match.group(2)
+                })
+
+        return {
+            "target": target,
+            "scan_results": scan_results,
+            "raw_output": output
         }
 
-        for proto in scanner[host].all_protocols():
-            ports_info = {}
-            for port, data in scanner[host][proto].items():
-                ports_info[port] = {
-                    "state":   data["state"],
-                    "name":    data.get("name", ""),
-                    "product": data.get("product", ""),
-                    "version": data.get("version", ""),
-                }
-            host_data["protocols"][proto] = ports_info
-
-        results.append(host_data)
-
-    return {"target": target, "scan_results": results}
+    except Exception as e:
+        return {
+            "error": str(e),
+            "target": target
+        }
